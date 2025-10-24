@@ -1,4 +1,12 @@
 %{
+This is a sample Matlab code of the Möbius-Transformed Trapezoidal Rule, appeared in the paper
+
+Y. Suzuki, N. Hyvönen, and T. Karvonen. “Möbius-Transformed Trapezoidal Rule”. AMS Mathematics of Computiation (2025, published online). DOI:10.1090/mcom/40
+
+Please cite as the following (bibtex):
+
+@article{SHK2024, doi = {10.1090/mcom/4084}, author = {Suzuki, Yuya and Hyv\"onen, Nuutti and Karvonen, Toni}, title = {M\"obius-Transformed Trapezoidal Rule}, JOURNAL = {AMS Mathematics of Computiation}, YEAR = {2025, published online}, }
+
 Copyright (c) 2025 Yuya Suzuki
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
@@ -44,6 +52,7 @@ xlabel('Number of points')
 ylabel('Absolute error') 
 
 rate = polyfit(log(err(1,4:end)),log(abs(err(2,4:end))),1)
+
 
 
 
