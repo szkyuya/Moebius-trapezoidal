@@ -7,7 +7,7 @@ Y. Suzuki, N. Hyvönen, and T. Karvonen. “Möbius-Transformed Trapezoidal Rule
 Mathematics of Computiation (2025, published online). DOI: 10.1090/mcom/40
 
 
-**Please cite as the following (bibtex):**
+**Please cite as the following (biblatex):**
 
 
 @article{SHK2024,
