@@ -8,6 +8,8 @@ Mathematics of Computiation (2025, published online). DOI: 10.1090/mcom/40
 
 
 Please cite as the following (bibtex):
+
+
 @article{SHK2024,
   doi = {10.1090/mcom/4084},
   author = {Suzuki, Yuya and Hyv\"onen, Nuutti and Karvonen, Toni},
