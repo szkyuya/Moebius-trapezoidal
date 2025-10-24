@@ -1,8 +1,6 @@
 # Moebius-trapezoidal
-A sample code for the Moebius-transformed trapezoidal rule
 
-
-This is a sample code of the Möbius-Transformed Trapezoidal Rule, appeared in the paper
+This is a sample Matlab code of the Möbius-Transformed Trapezoidal Rule, appeared in the paper
 
 
 Y. Suzuki, N. Hyvönen, and T. Karvonen. “Möbius-Transformed Trapezoidal Rule”. AMS
