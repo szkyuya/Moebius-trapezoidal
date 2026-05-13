@@ -4,10 +4,10 @@ This is a sample Matlab code of the Möbius-Transformed Trapezoidal Rule, appear
 
 
 Y. Suzuki, N. Hyvönen, and T. Karvonen. “Möbius-Transformed Trapezoidal Rule”. AMS
-Mathematics of Computiation. 95 (2026), no. 359, 1491–1515. DOI: 10.1090/mcom/40
+Mathematics of Computiation. 95 (2026), no. 359, 1491–1515. DOI: 10.1090/mcom/4084
 
 
-**Please cite as the following (bibtex):**
+**Please cite as the following (biblatex):**
 
 
 @article{SHK2024,
