@@ -36,7 +36,7 @@ n=2^ni+1; % number of points
 err(1,ni)=n;
 acc=0;
 for j=1:n
-theta=2*pi*(j)/n+1/(2*n);% equidistant point with a shift
+theta=2*pi*(j)/n+pi/n;% equidistant point with a shift
 x=phi(theta);
 acc=acc+f(x)*rho(x)*phi_(theta)*2*pi/(n);
 
