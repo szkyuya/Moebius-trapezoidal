@@ -55,10 +55,28 @@ result.value, result.error, result.n, result.converged
 
 Nodes whose weight underflows to zero far in the tails are skipped, so `f` is never evaluated there. Use `nodes_weights(n, prune=False)` to get all `n` nodes.
 
+## Randomly shifted rule with an error estimate
+
+The module `moebius_trapezoidal_randomized` replaces the fixed half step shift by a uniform random shift, $\theta_k = 2\pi(k+u)/n$ with $u \sim \mathrm{Uniform}[0,1)$. Each shifted rule is an unbiased estimate of the integral, so repeating it with independent shifts gives an estimate together with its standard error.
+
+```python
+import numpy as np
+import moebius_trapezoidal_randomized as mtr
+
+r = mtr.integrate_randomized(np.abs, 257, n_shifts=16, rng=1)
+r.value, r.std_error          # value ± 2 * std_error is an approximate 95% confidence interval
+r.estimates                   # the 16 individual estimates
+
+x, w = mtr.shifted_nodes_weights(257, 0.3)   # nodes and weights for a given shift
+```
+
+The total number of function values is `n * n_shifts`. All options of `integrate` (weights, `scale`, `loc`, vector valued integrands, `vectorized`) are available.
+
 ## Example and tests
 
 ```bash
 python examples/convergence.py   # the experiment of cot_trap.m, rate n^-2 for |x|
+python examples/randomized.py    # random shifts, actual error against the standard error
 pip install pytest
 pytest
 ```

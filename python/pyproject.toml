@@ -19,7 +19,7 @@ plot = ["matplotlib"]
 Paper = "https://doi.org/10.1090/mcom/4084"
 
 [tool.setuptools]
-py-modules = ["moebius_trapezoidal"]
+py-modules = ["moebius_trapezoidal", "moebius_trapezoidal_randomized"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

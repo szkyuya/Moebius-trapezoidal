@@ -29,7 +29,10 @@ SOFTWARE.
 """
 module MoebiusTrapezoidal
 
+using Random: AbstractRNG, default_rng
+
 export moebius_nodes, moebius_trap, moebius_quad,
+       moebius_nodes_shifted, moebius_trap_randomized,
        moebius_transform, moebius_jacobian,
        gaussian_weight, logistic_weight
 
@@ -210,5 +213,8 @@ function moebius_quad(f, weight=gaussian_weight; T::Type{<:AbstractFloat}=Float6
     end
     return (; value, error=err, n, converged=false)
 end
+
+# randomly shifted rule with an error estimate
+include("randomized.jl")
 
 end # module

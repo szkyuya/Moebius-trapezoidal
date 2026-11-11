@@ -74,3 +74,5 @@ end
         @test_throws ArgumentError moebius_trap(abs, 9, :unknown)
     end
 end
+
+include("randomized.jl")
