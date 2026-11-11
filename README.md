@@ -9,6 +9,8 @@ Mathematics of Computation. 95 (2026), no. 359, 1491–1515. DOI: 10.1090/mcom/4
 
 The rule approximates $\int_{\mathbb{R}} f(x)\rho(x)\,dx$ by the change of variables $x = -\cot(\theta/2)$, which maps the circle to the real line, followed by the trapezoidal rule with the shifted equispaced points $\theta_k = (2k-1)\pi/n$, $k = 1, \dots, n$.
 
+**Randomized version.** The Python and Julia code also contains a randomly shifted version, where the fixed shift is replaced by a uniform random shift, $\theta_k = 2\pi(k+u)/n$, $k = 0, \dots, n-1$, with $u \sim \mathrm{Uniform}[0,1)$. Each shifted rule is an unbiased estimate of the integral, so repeating it with independent shifts gives an estimate together with its standard error, e.g., for an approximate 95% confidence interval. For the randomized trapezoidal rule on the real line, see also T. Goda, Y. Kazashi, and Y. Suzuki, "Randomizing the trapezoidal rule gives the optimal RMSE rate in Gaussian Sobolev spaces", AMS Mathematics of Computation 93 (2024), 1655–1676, DOI: [10.1090/mcom/3910](https://doi.org/10.1090/mcom/3910).
+
 ## Implementations
 
 | Language | Location | Description |
@@ -27,6 +29,10 @@ import moebius_trapezoidal as mt
 mt.integrate(np.abs, 257)          # ∫ |x| φ(x) dx with the Gaussian density φ
 x, w = mt.nodes_weights(257)       # nodes and weights
 mt.quad(np.abs, rtol=1e-8)         # automatic refinement
+
+import moebius_trapezoidal_randomized as mtr
+r = mtr.integrate_randomized(np.abs, 257, n_shifts=16, rng=1)
+r.value, r.std_error               # randomized: estimate and its standard error
 ```
 
 Quick start in Julia:
@@ -36,6 +42,9 @@ using MoebiusTrapezoidal
 moebius_trap(abs, 257)             # ∫ |x| φ(x) dx with the Gaussian density φ
 x, w = moebius_nodes(257)          # nodes and weights
 moebius_quad(abs; rtol=1e-8)       # automatic refinement
+
+r = moebius_trap_randomized(abs, 257; nshifts=16)
+r.value, r.std_error               # randomized: estimate and its standard error
 ```
 
 **Please cite as the following (biblatex):**
