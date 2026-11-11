@@ -1,0 +1,62 @@
+# Möbius-transformed trapezoidal rule in Python
+
+Python implementation of the Möbius-transformed trapezoidal rule of
+
+> Y. Suzuki, N. Hyvönen, and T. Karvonen. "Möbius-transformed trapezoidal rule". AMS Mathematics of Computation 95 (2026), no. 359, 1491–1515. DOI: [10.1090/mcom/4084](https://doi.org/10.1090/mcom/4084)
+
+It approximates integrals $\int_{\mathbb{R}} f(x)\rho(x)\,dx$ by mapping the real line to the circle with $x = \mathrm{loc} - \mathrm{scale}\cdot\cot(\theta/2)$ and applying the trapezoidal rule with shifted equispaced points $\theta_k = (2k-1)\pi/n$. The default `scale=1`, `loc=0` is the transformation of the paper and of the Matlab code `cot_trap.m`.
+
+The only dependency is NumPy.
+
+## Installation
+
+```bash
+pip install "git+https://github.com/szkyuya/Moebius-trapezoidal#subdirectory=python"
+```
+
+Alternatively, copy the single file `moebius_trapezoidal.py` into your project.
+
+## Usage
+
+```python
+import numpy as np
+import moebius_trapezoidal as mt
+
+# ∫ |x| φ(x) dx with the standard Gaussian density φ, exact value sqrt(2/π)
+mt.integrate(np.abs, 257)                      # 0.79788...
+
+# other weights: "gaussian" (default), "logistic", any callable, or None for ∫ f(x) dx
+mt.integrate(lambda x: x**2, 729, "logistic")  # π^2/3
+mt.integrate(lambda x: np.exp(-x**2), 81, None)  # sqrt(π)
+
+# a weight that is not centred at 0, here the density of N(1, 2^2)
+rho = lambda x: np.exp(-(x - 1)**2 / 8) / np.sqrt(8 * np.pi)
+mt.integrate(lambda x: x, 243, rho, scale=2.0, loc=1.0)  # 1.0
+
+# nodes and weights, e.g. to reuse expensive function values
+x, w = mt.nodes_weights(257)
+value = w @ np.abs(x)
+
+# vector valued integrands: f returns an array of shape (number of nodes, ...)
+mt.integrate(lambda x: np.stack([x**2, x**4], axis=1), 243)  # [1, 3]
+
+# a scalar function that does not accept arrays
+import math
+mt.integrate(lambda x: math.cos(x), 243, vectorized=False)  # exp(-1/2)
+
+# automatic refinement until a tolerance is met
+result = mt.quad(np.abs, rtol=1e-8)
+result.value, result.error, result.n, result.converged
+```
+
+`quad` triples the number of points in each step, n, 3n, 9n, …, so that all previous function values are reused, and stops when the difference between the last two approximations is below `max(atol, rtol * |value|)`.
+
+Nodes whose weight underflows to zero far in the tails are skipped, so `f` is never evaluated there. Use `nodes_weights(n, prune=False)` to get all `n` nodes.
+
+## Example and tests
+
+```bash
+python examples/convergence.py   # the experiment of cot_trap.m, rate n^-2 for |x|
+pip install pytest
+pytest
+```

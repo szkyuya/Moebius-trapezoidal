@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "moebius-trapezoidal"
+version = "0.1.0"
+description = "Möbius-transformed trapezoidal rule for integrals over the real line"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = ["numpy"]
+authors = [{ name = "Yuya Suzuki" }]
+
+[project.optional-dependencies]
+test = ["pytest"]
+plot = ["matplotlib"]
+
+[project.urls]
+Paper = "https://doi.org/10.1090/mcom/4084"
+
+[tool.setuptools]
+py-modules = ["moebius_trapezoidal"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

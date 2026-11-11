@@ -1,0 +1,267 @@
+"""Möbius-transformed trapezoidal rule for integrals over the real line.
+
+The rule approximates
+
+    I(f) = ∫_R f(x) ρ(x) dx
+
+by mapping the real line to the circle with the Möbius transformation
+
+    x = φ(θ) = loc - scale * cot(θ / 2),    θ ∈ (0, 2π),
+
+and applying the trapezoidal rule with n equispaced points, shifted by half a
+step so that θ = 0 (that is, x = ±∞) is never evaluated:
+
+    θ_k = (2k - 1) π / n,   k = 1, ..., n,
+    I(f) ≈ (2π / n) Σ_k f(φ(θ_k)) ρ(φ(θ_k)) φ'(θ_k).
+
+The method attains the optimal rate of convergence in weighted Sobolev spaces
+without knowing the smoothness of f, see
+
+    Y. Suzuki, N. Hyvönen, and T. Karvonen. "Möbius-transformed trapezoidal
+    rule". AMS Mathematics of Computation 95 (2026), no. 359, 1491–1515.
+    DOI: 10.1090/mcom/4084
+
+The default ``scale=1`` and ``loc=0`` reproduce the transformation of the
+paper and of the Matlab code ``cot_trap.m``. Other values give an affine
+change of variables, which can be useful when the weight is not centred at 0
+or has a different spread.
+
+Copyright (c) 2025 Yuya Suzuki
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+
+from __future__ import annotations
+
+from typing import Callable, NamedTuple, Optional, Union
+
+import numpy as np
+
+__all__ = [
+    "gaussian_weight",
+    "logistic_weight",
+    "moebius_transform",
+    "moebius_jacobian",
+    "nodes_weights",
+    "integrate",
+    "quad",
+    "QuadResult",
+]
+
+__version__ = "0.1.0"
+
+ArrayLike = Union[float, np.ndarray]
+Weight = Union[None, str, Callable[[np.ndarray], np.ndarray]]
+
+
+# ---------------------------------------------------------------------------
+# Weight functions
+# ---------------------------------------------------------------------------
+
+def gaussian_weight(x: ArrayLike) -> np.ndarray:
+    """Standard normal density exp(-x^2/2) / sqrt(2π)."""
+    x = np.asarray(x, dtype=float)
+    return np.exp(-0.5 * x * x) / np.sqrt(2.0 * np.pi)
+
+
+def logistic_weight(x: ArrayLike) -> np.ndarray:
+    """Standard logistic density e^{-x} / (1 + e^{-x})^2, evaluated stably."""
+    x = np.asarray(x, dtype=float)
+    e = np.exp(-np.abs(x))
+    return e / (1.0 + e) ** 2
+
+
+_WEIGHTS = {
+    "gaussian": gaussian_weight,
+    "normal": gaussian_weight,
+    "logistic": logistic_weight,
+}
+
+
+def _resolve_weight(weight: Weight) -> Optional[Callable[[np.ndarray], np.ndarray]]:
+    if weight is None:
+        return None
+    if isinstance(weight, str):
+        try:
+            return _WEIGHTS[weight.lower()]
+        except KeyError:
+            names = ", ".join(sorted(_WEIGHTS))
+            raise ValueError(f"unknown weight {weight!r}, use one of {names}, "
+                             "a callable or None") from None
+    if callable(weight):
+        return weight
+    raise TypeError("weight must be None, a string or a callable")
+
+
+# ---------------------------------------------------------------------------
+# Transformation
+# ---------------------------------------------------------------------------
+
+def moebius_transform(theta: ArrayLike, scale: float = 1.0, loc: float = 0.0) -> np.ndarray:
+    """Map θ ∈ (0, 2π) to x = loc - scale * cot(θ/2) ∈ R."""
+    t = 0.5 * np.asarray(theta, dtype=float)
+    return loc - scale * np.cos(t) / np.sin(t)
+
+
+def moebius_jacobian(theta: ArrayLike, scale: float = 1.0) -> np.ndarray:
+    """Derivative dx/dθ = scale / (2 sin^2(θ/2)) of :func:`moebius_transform`."""
+    s = np.sin(0.5 * np.asarray(theta, dtype=float))
+    return scale / (2.0 * s * s)
+
+
+def _angles(n: int, k: Optional[np.ndarray] = None) -> np.ndarray:
+    """Shifted equispaced angles θ_k = (2k - 1)π/n."""
+    if k is None:
+        k = np.arange(1, n + 1)
+    return (2.0 * k - 1.0) * np.pi / n
+
+
+def _check(n: int, scale: float) -> None:
+    if not (isinstance(n, (int, np.integer)) and n >= 1):
+        raise ValueError("n must be a positive integer")
+    if not scale > 0:
+        raise ValueError("scale must be positive")
+
+
+# ---------------------------------------------------------------------------
+# Quadrature rule
+# ---------------------------------------------------------------------------
+
+def nodes_weights(n: int, weight: Weight = "gaussian", *, scale: float = 1.0,
+                  loc: float = 0.0, prune: bool = True):
+    """Nodes and weights of the n point Möbius-transformed trapezoidal rule.
+
+    The returned arrays satisfy ``sum(w * f(x)) ≈ ∫ f(x) ρ(x) dx``, in the
+    same way as ``numpy.polynomial.hermite_e.hermegauss`` for Gauss–Hermite.
+
+    Parameters
+    ----------
+    n : int
+        Number of points of the trapezoidal rule on the circle.
+    weight : {"gaussian", "normal", "logistic"}, callable or None
+        Weight function ρ. A callable must accept a NumPy array. With ``None``
+        the weights are for ∫ f(x) dx, so ρ must then be part of f.
+    scale, loc : float
+        Parameters of the transformation x = loc - scale * cot(θ/2).
+    prune : bool
+        If True (default), nodes whose weight is exactly zero, typically far in
+        the tails where ρ underflows, are removed. This saves evaluations of f
+        and avoids ``inf * 0`` when f grows fast.
+
+    Returns
+    -------
+    x, w : ndarray
+        Nodes in increasing order and the corresponding weights.
+    """
+    _check(n, scale)
+    rho = _resolve_weight(weight)
+    theta = _angles(n)
+    x = moebius_transform(theta, scale, loc)
+    w = (2.0 * np.pi / n) * moebius_jacobian(theta, scale)
+    if rho is not None:
+        w = w * np.asarray(rho(x), dtype=float)
+    if prune:
+        keep = w != 0
+        x, w = x[keep], w[keep]
+    return x, w
+
+
+def _evaluate(f, x: np.ndarray, vectorized: bool) -> np.ndarray:
+    if vectorized:
+        y = np.asarray(f(x))
+        if y.shape[:1] != x.shape:
+            raise ValueError("a vectorized f must return an array whose first "
+                             f"dimension has length {x.size}, got shape {y.shape}; "
+                             "use vectorized=False for scalar functions")
+        return y
+    return np.asarray([f(xi) for xi in x])
+
+
+def integrate(f: Callable, n: int, weight: Weight = "gaussian", *, scale: float = 1.0,
+              loc: float = 0.0, vectorized: bool = True):
+    """Approximate ∫ f(x) ρ(x) dx with the n point Möbius-transformed trapezoidal rule.
+
+    Parameters
+    ----------
+    f : callable
+        Integrand. By default it is called once with the array of all nodes
+        and must return an array of shape ``(m,)`` or ``(m, ...)``, where m is
+        the number of nodes. Vector or matrix valued integrands are therefore
+        supported. Set ``vectorized=False`` to call f node by node.
+    n : int
+        Number of points.
+    weight, scale, loc
+        See :func:`nodes_weights`.
+
+    Returns
+    -------
+    float or ndarray
+        The approximation, with the shape of a single value of f.
+    """
+    x, w = nodes_weights(n, weight, scale=scale, loc=loc)
+    y = _evaluate(f, x, vectorized)
+    return np.tensordot(w, y, axes=(0, 0))
+
+
+class QuadResult(NamedTuple):
+    """Result of :func:`quad`."""
+
+    value: Union[float, np.ndarray]
+    error: float
+    n: int
+    converged: bool
+
+
+def quad(f: Callable, weight: Weight = "gaussian", *, rtol: float = 1e-10,
+         atol: float = 0.0, n_start: int = 9, n_max: int = 3 ** 13,
+         scale: float = 1.0, loc: float = 0.0, vectorized: bool = True) -> QuadResult:
+    """Integrate with automatic refinement until a tolerance is met.
+
+    The number of points is tripled in each step, n, 3n, 9n, ..., so that all
+    previous function values are reused (the shifted angles of the n point
+    rule are a subset of those of the 3n point rule). The error estimate is
+    the difference between the last two approximations, which is
+    conservative for the fast convergence of the method.
+
+    Returns
+    -------
+    QuadResult
+        Named tuple ``(value, error, n, converged)``, where ``n`` is the number
+        of points of the final rule.
+    """
+    _check(n_start, scale)
+    rho = _resolve_weight(weight)
+
+    def partial_sum(n: int, k: np.ndarray):
+        theta = _angles(n, k)
+        x = moebius_transform(theta, scale, loc)
+        w = moebius_jacobian(theta, scale)
+        if rho is not None:
+            w = w * np.asarray(rho(x), dtype=float)
+        keep = w != 0
+        if not np.any(keep):
+            return 0.0
+        y = _evaluate(f, x[keep], vectorized)
+        return np.tensordot(w[keep], y, axes=(0, 0))
+
+    n = n_start
+    s = partial_sum(n, np.arange(1, n + 1))
+    value = (2.0 * np.pi / n) * s
+    error = np.inf
+    while 3 * n <= n_max:
+        k = np.arange(1, 3 * n + 1)
+        new = k[k % 3 != 2]  # k = 3j - 1 are the nodes of the previous rule
+        s = s + partial_sum(3 * n, new)
+        n *= 3
+        new_value = (2.0 * np.pi / n) * s
+        error = float(np.max(np.abs(new_value - value)))
+        value = new_value
+        if error <= max(atol, rtol * float(np.max(np.abs(value)))):
+            return QuadResult(value, error, n, True)
+    return QuadResult(value, error, n, False)

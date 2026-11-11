@@ -1,0 +1,211 @@
+"""
+    MoebiusTrapezoidal
+
+Möbius-transformed trapezoidal rule for integrals over the real line,
+
+    ∫ f(x) ρ(x) dx ≈ (2π/n) Σₖ f(φ(θₖ)) ρ(φ(θₖ)) φ'(θₖ),
+
+with the transformation `φ(θ) = loc - scale * cot(θ/2)` and the shifted
+equispaced angles `θₖ = (2k - 1)π/n`, `k = 1, …, n`. The default `scale = 1`
+and `loc = 0` reproduce the transformation of the paper and of the Matlab code
+`cot_trap.m`.
+
+Reference: Y. Suzuki, N. Hyvönen, and T. Karvonen. "Möbius-transformed
+trapezoidal rule". AMS Mathematics of Computation 95 (2026), no. 359,
+1491–1515. DOI: 10.1090/mcom/4084
+
+Copyright (c) 2025 Yuya Suzuki
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+module MoebiusTrapezoidal
+
+export moebius_nodes, moebius_trap, moebius_quad,
+       moebius_transform, moebius_jacobian,
+       gaussian_weight, logistic_weight
+
+# ---------------------------------------------------------------------------
+# Weight functions
+# ---------------------------------------------------------------------------
+
+"""
+    gaussian_weight(x)
+
+Standard normal density `exp(-x^2/2) / sqrt(2π)`.
+"""
+function gaussian_weight(x::Real)
+    y = float(x)
+    return exp(-y^2 / 2) / sqrt(2 * oftype(y, π))
+end
+
+"""
+    logistic_weight(x)
+
+Standard logistic density `exp(-x) / (1 + exp(-x))^2`, evaluated stably.
+"""
+function logistic_weight(x::Real)
+    e = exp(-abs(float(x)))
+    return e / (1 + e)^2
+end
+
+function _resolve(weight::Symbol)
+    if weight === :gaussian || weight === :normal
+        return gaussian_weight
+    elseif weight === :logistic
+        return logistic_weight
+    end
+    throw(ArgumentError("unknown weight :$weight, use :gaussian, :normal, :logistic, a function or nothing"))
+end
+_resolve(weight) = weight
+
+_weight(::Nothing, x) = one(x)
+_weight(ρ, x) = ρ(x)
+
+# ---------------------------------------------------------------------------
+# Transformation
+# ---------------------------------------------------------------------------
+
+"""
+    moebius_transform(θ; scale=1, loc=0)
+
+Map `θ ∈ (0, 2π)` to `x = loc - scale * cot(θ/2) ∈ ℝ`.
+"""
+moebius_transform(θ::Real; scale::Real=1, loc::Real=0) = loc - scale * cot(θ / 2)
+
+"""
+    moebius_jacobian(θ; scale=1)
+
+Derivative `dx/dθ = scale / (2 sin(θ/2)^2)` of [`moebius_transform`](@ref).
+"""
+moebius_jacobian(θ::Real; scale::Real=1) = scale / (2 * sin(θ / 2)^2)
+
+# shifted equispaced angles θₖ = (2k - 1)π/n
+_angle(::Type{T}, n::Integer, k::Integer) where {T<:AbstractFloat} = (2k - 1) * T(π) / n
+
+function _check(n::Integer, scale::Real)
+    n ≥ 1 || throw(ArgumentError("n must be a positive integer, got $n"))
+    scale > 0 || throw(ArgumentError("scale must be positive, got $scale"))
+    return nothing
+end
+
+# ---------------------------------------------------------------------------
+# Quadrature rule
+# ---------------------------------------------------------------------------
+
+"""
+    moebius_nodes(n, weight=gaussian_weight; scale=1, loc=0, T=Float64, prune=true) -> (x, w)
+
+Nodes `x` (in increasing order) and weights `w` of the `n` point
+Möbius-transformed trapezoidal rule, so that `sum(w .* f.(x))` approximates
+`∫ f(x) ρ(x) dx`, in the same way as `gausshermite(n)` of FastGaussQuadrature.jl.
+
+- `weight`: a function `ρ(x)`, one of the symbols `:gaussian`, `:normal`,
+  `:logistic`, or `nothing` for `∫ f(x) dx`.
+- `scale`, `loc`: parameters of the transformation `x = loc - scale * cot(θ/2)`.
+- `T`: floating point type of the nodes and weights, e.g. `BigFloat`.
+- `prune`: remove nodes whose weight is exactly zero, typically far in the tails
+  where `ρ` underflows. This saves evaluations of `f` and avoids `Inf * 0`.
+"""
+function moebius_nodes(n::Integer, weight=gaussian_weight; scale::Real=1, loc::Real=0,
+                       T::Type{<:AbstractFloat}=Float64, prune::Bool=true)
+    _check(n, scale)
+    ρ = _resolve(weight)
+    s, l = T(scale), T(loc)
+    h = 2 * T(π) / n
+    x = Vector{T}(undef, n)
+    w = Vector{T}(undef, n)
+    for k in 1:n
+        θ = _angle(T, n, k)
+        x[k] = moebius_transform(θ; scale=s, loc=l)
+        w[k] = h * moebius_jacobian(θ; scale=s) * _weight(ρ, x[k])
+    end
+    if prune
+        keep = w .!= 0
+        return x[keep], w[keep]
+    end
+    return x, w
+end
+
+"""
+    moebius_trap(f, n, weight=gaussian_weight; scale=1, loc=0, T=Float64)
+
+Approximate `∫ f(x) ρ(x) dx` with the `n` point Möbius-transformed trapezoidal
+rule. `f` is called at each node and may return a number or an array, so vector
+valued integrands are supported. See [`moebius_nodes`](@ref) for the keywords.
+
+# Examples
+```julia
+moebius_trap(abs, 257)                     # ≈ sqrt(2/π), Gaussian weight
+moebius_trap(x -> x^2, 729, :logistic)     # ≈ π^2/3
+moebius_trap(x -> exp(-x^2), 81, nothing)  # ≈ sqrt(π)
+moebius_trap(x -> x^2, 729; T=BigFloat)    # high precision
+```
+"""
+function moebius_trap(f, n::Integer, weight=gaussian_weight; kwargs...)
+    x, w = moebius_nodes(n, weight; kwargs...)
+    isempty(x) && throw(ArgumentError("all weights underflow to zero, increase n or check the weight"))
+    return sum(w[i] * f(x[i]) for i in eachindex(x, w))
+end
+
+_size(v) = maximum(abs, v)  # works for numbers and arrays
+
+"""
+    moebius_quad(f, weight=gaussian_weight; rtol=sqrt(eps(T)), atol=0, n_start=9,
+                 n_max=3^13, scale=1, loc=0, T=Float64) -> (; value, error, n, converged)
+
+Integrate with automatic refinement until `error ≤ max(atol, rtol * |value|)`.
+
+The number of points is tripled in each step, `n, 3n, 9n, …`, so that all
+previous function values are reused (the angles of the `n` point rule are a
+subset of those of the `3n` point rule). The error estimate is the difference
+between the last two approximations, which is conservative for the fast
+convergence of the method.
+"""
+function moebius_quad(f, weight=gaussian_weight; T::Type{<:AbstractFloat}=Float64,
+                      rtol::Real=sqrt(eps(T)), atol::Real=0, n_start::Integer=9,
+                      n_max::Integer=3^13, scale::Real=1, loc::Real=0)
+    _check(n_start, scale)
+    ρ = _resolve(weight)
+    s, l = T(scale), T(loc)
+
+    # sum of the weighted function values at the angles θₖ, k ∈ ks, of the n point rule
+    function partial_sum(n, ks)
+        acc = nothing
+        for k in ks
+            θ = _angle(T, n, k)
+            x = moebius_transform(θ; scale=s, loc=l)
+            wk = moebius_jacobian(θ; scale=s) * _weight(ρ, x)
+            iszero(wk) && continue
+            term = wk * f(x)
+            acc = acc === nothing ? term : acc + term
+        end
+        return acc
+    end
+
+    n = n_start
+    S = partial_sum(n, 1:n)
+    S === nothing && throw(ArgumentError("all weights underflow to zero, increase n_start or check the weight"))
+    value = 2 * T(π) / n * S
+    err = T(Inf)
+    while 3n ≤ n_max
+        # k = 3j - 1 are the angles of the previous rule, only the others are new
+        added = partial_sum(3n, (k for k in 1:3n if mod(k, 3) != 2))
+        added === nothing || (S = S + added)
+        n *= 3
+        new_value = 2 * T(π) / n * S
+        err = _size(new_value - value)
+        value = new_value
+        if err ≤ max(atol, rtol * _size(value))
+            return (; value, error=err, n, converged=true)
+        end
+    end
+    return (; value, error=err, n, converged=false)
+end
+
+end # module

@@ -1,11 +1,40 @@
 # Moebius-trapezoidal
 
-This is a sample Matlab code of the Möbius-Transformed Trapezoidal Rule, appeared in the paper
+Sample code of the Möbius-Transformed Trapezoidal Rule in Matlab, Python and Julia, appeared in the paper
 
 
 Y. Suzuki, N. Hyvönen, and T. Karvonen. “Möbius-Transformed Trapezoidal Rule”. AMS
-Mathematics of Computiation. 95 (2026), no. 359, 1491–1515. DOI: 10.1090/mcom/4084
+Mathematics of Computation. 95 (2026), no. 359, 1491–1515. DOI: 10.1090/mcom/4084
 
+
+The rule approximates $\int_{\mathbb{R}} f(x)\rho(x)\,dx$ by the change of variables $x = -\cot(\theta/2)$, which maps the circle to the real line, followed by the trapezoidal rule with the shifted equispaced points $\theta_k = (2k-1)\pi/n$, $k = 1, \dots, n$.
+
+## Implementations
+
+| Language | Location | Description |
+|---|---|---|
+| Matlab | [`cot_trap.m`](cot_trap.m) | The original sample script, with a convergence experiment for $\lvert x\rvert^p$ and the Gaussian weight. |
+| Python | [`python/`](python) | Module `moebius_trapezoidal` (NumPy), with nodes and weights, vectorized and vector valued integrands, and automatic refinement. See [`python/README.md`](python/README.md). |
+| Julia | [`julia/MoebiusTrapezoidal/`](julia/MoebiusTrapezoidal) | Package `MoebiusTrapezoidal.jl` without dependencies, generic in the floating point type (e.g. `BigFloat`). See [`julia/MoebiusTrapezoidal/README.md`](julia/MoebiusTrapezoidal/README.md). |
+
+Quick start in Python:
+
+```python
+import numpy as np
+import moebius_trapezoidal as mt
+mt.integrate(np.abs, 257)          # ∫ |x| φ(x) dx with the Gaussian density φ
+x, w = mt.nodes_weights(257)       # nodes and weights
+mt.quad(np.abs, rtol=1e-8)         # automatic refinement
+```
+
+Quick start in Julia:
+
+```julia
+using MoebiusTrapezoidal
+moebius_trap(abs, 257)             # ∫ |x| φ(x) dx with the Gaussian density φ
+x, w = moebius_nodes(257)          # nodes and weights
+moebius_quad(abs; rtol=1e-8)       # automatic refinement
+```
 
 **Please cite as the following (biblatex):**
 

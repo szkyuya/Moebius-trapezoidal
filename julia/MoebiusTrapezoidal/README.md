@@ -1,0 +1,61 @@
+# MoebiusTrapezoidal.jl
+
+Julia implementation of the Möbius-transformed trapezoidal rule of
+
+> Y. Suzuki, N. Hyvönen, and T. Karvonen. "Möbius-transformed trapezoidal rule". AMS Mathematics of Computation 95 (2026), no. 359, 1491–1515. DOI: [10.1090/mcom/4084](https://doi.org/10.1090/mcom/4084)
+
+It approximates integrals $\int_{\mathbb{R}} f(x)\rho(x)\,dx$ by mapping the real line to the circle with $x = \mathrm{loc} - \mathrm{scale}\cdot\cot(\theta/2)$ and applying the trapezoidal rule with shifted equispaced points $\theta_k = (2k-1)\pi/n$. The default `scale=1`, `loc=0` is the transformation of the paper and of the Matlab code `cot_trap.m`.
+
+The package has no dependencies and works with any floating point type, e.g. `BigFloat`.
+
+## Installation
+
+```julia
+using Pkg
+Pkg.add(url="https://github.com/szkyuya/Moebius-trapezoidal", subdir="julia/MoebiusTrapezoidal")
+```
+
+## Usage
+
+```julia
+using MoebiusTrapezoidal
+
+# ∫ |x| φ(x) dx with the standard Gaussian density φ, exact value sqrt(2/π)
+moebius_trap(abs, 257)
+
+# other weights: gaussian_weight (default), logistic_weight or :logistic,
+# any function, or nothing for ∫ f(x) dx
+moebius_trap(x -> x^2, 729, :logistic)       # π^2/3
+moebius_trap(x -> exp(-x^2), 81, nothing)    # sqrt(π)
+
+# a weight that is not centred at 0, here the density of N(1, 2^2)
+ρ(x) = exp(-(x - 1)^2 / 8) / sqrt(8π)
+moebius_trap(identity, 243, ρ; scale=2, loc=1)  # 1.0
+
+# nodes and weights, as gausshermite(n) in FastGaussQuadrature.jl
+x, w = moebius_nodes(257)
+sum(w .* abs.(x))
+
+# vector valued integrands
+moebius_trap(x -> [x^2, x^4], 243)           # [1, 3]
+
+# high precision
+moebius_trap(x -> x^2, 729; T=BigFloat)
+
+# automatic refinement until a tolerance is met
+r = moebius_quad(abs; rtol=1e-8)
+r.value, r.error, r.n, r.converged
+```
+
+`moebius_quad` triples the number of points in each step, n, 3n, 9n, …, so that all previous function values are reused, and stops when the difference between the last two approximations is below `max(atol, rtol * |value|)`.
+
+Nodes whose weight underflows to zero far in the tails are skipped, so `f` is never evaluated there. Use `moebius_nodes(n; prune=false)` to get all `n` nodes.
+
+## Example and tests
+
+From the directory `julia/MoebiusTrapezoidal`:
+
+```bash
+julia --project=. examples/convergence.jl   # the experiment of cot_trap.m, rate n^-2 for |x|
+julia --project=. -e 'using Pkg; Pkg.test()'
+```
