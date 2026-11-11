@@ -32,7 +32,7 @@ module MoebiusTrapezoidal
 using Random: AbstractRNG, default_rng
 
 export moebius_nodes, moebius_trap, moebius_quad,
-       moebius_nodes_shifted, moebius_trap_randomized,
+       moebius_nodes_shifted, moebius_trap_randomized, moebius_trap_rmt,
        moebius_transform, moebius_jacobian,
        gaussian_weight, logistic_weight
 

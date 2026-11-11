@@ -62,3 +62,47 @@ using Test
         @test_throws ArgumentError moebius_nodes_shifted(9, 1.0)
     end
 end
+
+@testset "randomized rule with a random number of points" begin
+    θ(x) = 2 * atan(1, -x)  # inverse of x = -cot(θ/2)
+
+    @testset "unbiased with standard error" begin
+        exact = sqrt(2 / π)
+        r = moebius_trap_rmt(abs, 33; nsamples=64, rng=MersenneTwister(11))
+        @test r.std_error > 0
+        @test abs(r.value - exact) < 5 * r.std_error
+        @test length(r.estimates) == 64 && length(r.points) == 64
+    end
+
+    @testset "number of points" begin
+        r = moebius_trap_rmt(abs, 101; nsamples=200, rng=MersenneTwister(12))
+        @test minimum(r.points) ≥ 50 && maximum(r.points) ≤ 101
+        @test length(unique(r.points)) > 20
+    end
+
+    @testset "beats a fixed n in the worst case" begin
+        # frequency n after the transformation is aliased completely by the n point rule
+        n = 128
+        f(x) = cos(n * θ(x))
+        exact = moebius_trap(f, 3^9)
+        rmse(e) = sqrt(sum(abs2, e .- exact) / length(e))
+        shift = moebius_trap_randomized(f, n; nshifts=200, rng=MersenneTwister(13)).estimates
+        rmt = moebius_trap_rmt(f, n; nsamples=200, rng=MersenneTwister(14)).estimates
+        @test rmse(shift) > 0.5
+        @test rmse(rmt) < 0.5 * rmse(shift)
+    end
+
+    @testset "reproducible, vector valued and options" begin
+        a = moebius_trap_rmt(abs, 17; rng=MersenneTwister(15))
+        b = moebius_trap_rmt(abs, 17; rng=MersenneTwister(15))
+        @test a.value == b.value && a.points == b.points
+        r = moebius_trap_rmt(x -> [x^2, abs(x)], 130; rng=MersenneTwister(16))
+        @test length(r.value) == 2 && r.value[1] ≈ 1 rtol = 1e-6
+        @test moebius_trap_rmt(x -> x^2, 486, :logistic; rng=MersenneTwister(17)).value ≈ π^2 / 3 rtol = 1e-6
+    end
+
+    @testset "argument checks" begin
+        @test_throws ArgumentError moebius_trap_rmt(abs, 1)
+        @test_throws ArgumentError moebius_trap_rmt(abs, 9; nsamples=1)
+    end
+end

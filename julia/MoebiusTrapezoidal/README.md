@@ -69,6 +69,13 @@ x, w = moebius_nodes_shifted(257, 0.3)   # nodes and weights for a given shift
 
 The total number of function values is `n * nshifts`. The keywords of `moebius_trap` (`scale`, `loc`, `T`) are available, and vector valued integrands are supported.
 
+The second randomized rule, `moebius_trap_rmt`, is the randomized Möbius-transformed trapezoidal rule of Definition 4.1 in [arXiv:2407.13650](https://arxiv.org/abs/2407.13650). Each sample also draws the number of points $M$ uniformly from $\{\lfloor n/2\rfloor, \dots, n\}$, which improves the worst-case root-mean-squared error over the weighted Sobolev space of smoothness $\alpha$ to the optimal order $n^{-\alpha-1/2}$ (Theorem 4.2 therein), half an order better than with a fixed $n$. The gain is in the worst case: integrands with strong oscillations at a frequency close to $n$ after the transformation are aliased completely by a fixed $n$, but not by a random $M$. For integrands whose transformed Fourier coefficients decay regularly, such as $\lvert x\rvert$, both rules converge at the same rate, and `moebius_trap_rmt` has a somewhat larger error since it uses about $3n/4$ points per sample on average. `examples/rmse_comparison.jl` compares the two rules.
+
+```julia
+r = moebius_trap_rmt(abs, 257; nsamples=16, rng=MersenneTwister(1))
+r.value, r.std_error, r.points   # points: the number of points M of each sample
+```
+
 ## Example and tests
 
 From the directory `julia/MoebiusTrapezoidal`:
@@ -76,5 +83,6 @@ From the directory `julia/MoebiusTrapezoidal`:
 ```bash
 julia --project=. examples/convergence.jl   # the experiment of cot_trap.m, rate n^-2 for |x|
 julia --project=. examples/randomized.jl    # random shifts, actual error against the standard error
+julia --project=. examples/rmse_comparison.jl   # RMSE of the two randomized rules
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```

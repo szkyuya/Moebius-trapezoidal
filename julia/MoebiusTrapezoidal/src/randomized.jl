@@ -7,6 +7,14 @@
 # independent shifts gives R unbiased estimates, whose mean is the final
 # estimate and whose standard deviation divided by sqrt(R) is its standard
 # error. With u = 1/2 the rule is the deterministic rule of moebius_nodes.
+# This is moebius_trap_randomized.
+#
+# moebius_trap_rmt is the randomized Möbius-transformed trapezoidal rule of
+# Definition 4.1 in Y. Suzuki, N. Hyvönen, and T. Karvonen, "Möbius-transformed
+# trapezoidal rule" (arXiv:2407.13650). Besides the random shift, the number of
+# points is also random, uniform on {⌊n/2⌋, …, n}. This improves the worst-case
+# root-mean-squared error to the optimal order n^(-α-1/2) (Theorem 4.2 therein),
+# half an order better than with a fixed number of points.
 #
 # See also T. Goda, Y. Kazashi, and Y. Suzuki, "Randomizing the trapezoidal rule
 # gives the optimal RMSE rate in Gaussian Sobolev spaces", AMS Mathematics of
@@ -84,4 +92,46 @@ function moebius_trap_randomized(f, n::Integer, weight=gaussian_weight; nshifts:
     variance = sum(e -> abs2.(e .- value), estimates) / (nshifts - 1)  # numbers and arrays
     std_error = sqrt.(variance ./ nshifts)
     return (; value, std_error, estimates, n, nshifts)
+end
+
+"""
+    moebius_trap_rmt(f, n, weight=gaussian_weight; nsamples=16, rng=default_rng(),
+                     scale=1, loc=0, T=Float64) -> (; value, std_error, estimates, points, n, nsamples)
+
+Randomized Möbius-transformed trapezoidal rule with a random number of points,
+Definition 4.1 in Suzuki, Hyvönen and Karvonen, "Möbius-transformed trapezoidal
+rule" (arXiv:2407.13650).
+
+Each sample draws the number of points `M` uniformly from `{⌊n/2⌋, …, n}` and a
+shift `δ` uniformly from `[0, 1)`, independently, and applies the `M` point rule
+with the angles `θⱼ = 2π(j + δ)/M`, `j = 0, …, M-1`. Every sample is an unbiased
+estimate of the integral. The worst-case root-mean-squared error over the
+weighted Sobolev space of smoothness `α` is of the optimal order `n^(-α-1/2)`,
+half an order better than with the fixed number of points of
+[`moebius_trap_randomized`](@ref) (Theorem 4.2 therein). The gain concerns the
+worst case, i.e., integrands with strong oscillations at frequencies close to
+`n` after the transformation, which a fixed `n` can alias completely. For
+integrands whose transformed Fourier coefficients decay regularly, such as
+`abs`, both rules show the same rate, and this rule is somewhat less accurate
+since it uses fewer points on average (about `3n/4` per sample).
+
+`value` is the mean of the `estimates`, `std_error` their sample standard
+deviation divided by `sqrt(nsamples)`, and `points` the number of points `M` of
+each sample. `n` must be at least 2.
+"""
+function moebius_trap_rmt(f, n::Integer, weight=gaussian_weight; nsamples::Integer=16,
+                          rng::AbstractRNG=default_rng(),
+                          T::Type{<:AbstractFloat}=Float64, kwargs...)
+    n ≥ 2 || throw(ArgumentError("n must be at least 2, got $n"))
+    nsamples ≥ 2 || throw(ArgumentError("nsamples must be at least 2 to estimate the error, got $nsamples"))
+    points = rand(rng, (n ÷ 2):n, nsamples)
+    estimates = map(points) do M
+        x, w = moebius_nodes_shifted(M, rand(rng, T), weight; T=T, kwargs...)
+        isempty(x) && throw(ArgumentError("all weights underflow to zero, increase n or check the weight"))
+        sum(w[i] * f(x[i]) for i in eachindex(x, w))
+    end
+    value = sum(estimates) / nsamples
+    variance = sum(e -> abs2.(e .- value), estimates) / (nsamples - 1)  # numbers and arrays
+    std_error = sqrt.(variance ./ nsamples)
+    return (; value, std_error, estimates, points, n, nsamples)
 end

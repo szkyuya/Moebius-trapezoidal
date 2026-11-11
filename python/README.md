@@ -72,11 +72,19 @@ x, w = mtr.shifted_nodes_weights(257, 0.3)   # nodes and weights for a given shi
 
 The total number of function values is `n * n_shifts`. All options of `integrate` (weights, `scale`, `loc`, vector valued integrands, `vectorized`) are available.
 
+The second randomized rule, `integrate_rmt`, is the randomized Möbius-transformed trapezoidal rule of Definition 4.1 in [arXiv:2407.13650](https://arxiv.org/abs/2407.13650). Each sample also draws the number of points $M$ uniformly from $\{\lfloor n/2\rfloor, \dots, n\}$, which improves the worst-case root-mean-squared error over the weighted Sobolev space of smoothness $\alpha$ to the optimal order $n^{-\alpha-1/2}$ (Theorem 4.2 therein), half an order better than with a fixed $n$. The gain is in the worst case: integrands with strong oscillations at a frequency close to $n$ after the transformation are aliased completely by a fixed $n$, but not by a random $M$. For integrands whose transformed Fourier coefficients decay regularly, such as $\lvert x\rvert$, both rules converge at the same rate, and `integrate_rmt` has a somewhat larger error since it uses about $3n/4$ points per sample on average. `examples/rmse_comparison.py` compares the two rules.
+
+```python
+r = mtr.integrate_rmt(np.abs, 257, n_samples=16, rng=1)
+r.value, r.std_error, r.points   # points: the number of points M of each sample
+```
+
 ## Example and tests
 
 ```bash
 python examples/convergence.py   # the experiment of cot_trap.m, rate n^-2 for |x|
 python examples/randomized.py    # random shifts, actual error against the standard error
+python examples/rmse_comparison.py   # RMSE of the two randomized rules
 pip install pytest
 pytest
 ```

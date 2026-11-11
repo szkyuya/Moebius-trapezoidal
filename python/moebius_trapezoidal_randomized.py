@@ -11,7 +11,16 @@ and since u is uniform over one grid step, its expectation is exactly the
 integral ∫ f(x) ρ(x) dx. Repeating this with R independent shifts gives R
 unbiased estimates, whose mean is the final estimate and whose standard
 deviation divided by sqrt(R) is its standard error. With ``u = 1/2`` the rule
-is the deterministic rule of :mod:`moebius_trapezoidal`.
+is the deterministic rule of :mod:`moebius_trapezoidal`. This is
+:func:`integrate_randomized`.
+
+:func:`integrate_rmt` is the randomized Möbius-transformed trapezoidal rule of
+Definition 4.1 in Y. Suzuki, N. Hyvönen, and T. Karvonen, "Möbius-transformed
+trapezoidal rule" (arXiv:2407.13650). Besides the random shift, the number of
+points is also random, uniform on {⌊n/2⌋, ..., n}. This improves the worst-case
+root-mean-squared error to the optimal order n^(-α-1/2) for integrands in the
+weighted Sobolev space of smoothness α (Theorem 4.2 therein), half an order
+better than with a fixed number of points.
 
 For the randomized trapezoidal rule on the real line, see also
 
@@ -48,7 +57,13 @@ from moebius_trapezoidal import (
     moebius_transform,
 )
 
-__all__ = ["shifted_nodes_weights", "integrate_randomized", "RandomizedResult"]
+__all__ = [
+    "shifted_nodes_weights",
+    "integrate_randomized",
+    "RandomizedResult",
+    "integrate_rmt",
+    "RMTResult",
+]
 
 
 def shifted_nodes_weights(n: int, shift: float, weight: Weight = "gaussian", *,
@@ -140,3 +155,70 @@ def integrate_randomized(f: Callable, n: int, weight: Weight = "gaussian", *,
     value = estimates.mean(axis=0)
     std_error = estimates.std(axis=0, ddof=1) / np.sqrt(n_shifts)
     return RandomizedResult(value, std_error, estimates, n, n_shifts)
+
+
+class RMTResult(NamedTuple):
+    """Result of :func:`integrate_rmt`."""
+
+    value: Union[float, np.ndarray]
+    std_error: Union[float, np.ndarray]
+    estimates: np.ndarray
+    points: np.ndarray
+    n: int
+    n_samples: int
+
+
+def integrate_rmt(f: Callable, n: int, weight: Weight = "gaussian", *,
+                  n_samples: int = 16, rng=None, scale: float = 1.0,
+                  loc: float = 0.0, vectorized: bool = True) -> RMTResult:
+    """Randomized Möbius-transformed trapezoidal rule with a random number of points.
+
+    This is the rule of Definition 4.1 in Suzuki, Hyvönen and Karvonen,
+    "Möbius-transformed trapezoidal rule" (arXiv:2407.13650). Each sample draws
+    the number of points M uniformly from {⌊n/2⌋, ..., n} and a shift δ
+    uniformly from [0, 1), independently, and applies the M point rule with the
+    angles θ_j = 2π(j + δ)/M, j = 0, ..., M - 1.
+
+    Every sample is an unbiased estimate of the integral. The worst-case
+    root-mean-squared error over the weighted Sobolev space of smoothness α is
+    of the optimal order n^(-α-1/2), half an order better than with the fixed
+    number of points of :func:`integrate_randomized` (Theorem 4.2 therein). The
+    gain concerns the worst case, i.e., integrands with strong oscillations at
+    frequencies close to n after the transformation, which a fixed n can alias
+    completely. For integrands whose transformed Fourier coefficients decay
+    regularly, such as |x|, both rules show the same rate, and this rule is
+    somewhat less accurate since it uses fewer points on average.
+
+    Parameters
+    ----------
+    f, n, weight, scale, loc, vectorized
+        As in :func:`integrate_randomized`. ``n`` must be at least 2.
+    n_samples : int
+        Number of independent samples (M, δ), at least 2. Each sample uses at
+        most n points, about 3n/4 on average.
+    rng : numpy.random.Generator, int or None
+        Random number generator, or a seed for ``numpy.random.default_rng``.
+
+    Returns
+    -------
+    RMTResult
+        Named tuple ``(value, std_error, estimates, points, n, n_samples)``.
+        ``value`` is the mean of the estimates, ``std_error`` their sample
+        standard deviation divided by ``sqrt(n_samples)``, and ``points`` the
+        number of points M of each sample.
+    """
+    if not (isinstance(n, (int, np.integer)) and n >= 2):
+        raise ValueError("n must be an integer of at least 2")
+    if not (isinstance(n_samples, (int, np.integer)) and n_samples >= 2):
+        raise ValueError("n_samples must be an integer of at least 2 to estimate the error")
+    rng = np.random.default_rng(rng)
+    points = rng.integers(n // 2, n + 1, size=n_samples)
+    estimates = []
+    for m in points:
+        x, w = shifted_nodes_weights(int(m), float(rng.random()), weight, scale=scale, loc=loc)
+        y = _evaluate(f, x, vectorized)
+        estimates.append(np.tensordot(w, y, axes=(0, 0)))
+    estimates = np.asarray(estimates)
+    value = estimates.mean(axis=0)
+    std_error = estimates.std(axis=0, ddof=1) / np.sqrt(n_samples)
+    return RMTResult(value, std_error, estimates, points, n, n_samples)
