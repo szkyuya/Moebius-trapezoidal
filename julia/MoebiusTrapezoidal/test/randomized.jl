@@ -97,7 +97,8 @@ end
         b = moebius_trap_rmt(abs, 17; rng=MersenneTwister(15))
         @test a.value == b.value && a.points == b.points
         r = moebius_trap_rmt(x -> [x^2, abs(x)], 130; rng=MersenneTwister(16))
-        @test length(r.value) == 2 && r.value[1] ≈ 1 rtol = 1e-6
+        @test length(r.value) == 2
+        @test r.value[1] ≈ 1 rtol = 1e-6
         @test moebius_trap_rmt(x -> x^2, 486, :logistic; rng=MersenneTwister(17)).value ≈ π^2 / 3 rtol = 1e-6
     end
 
