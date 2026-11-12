@@ -55,8 +55,8 @@ r = moebius_trap_rmt(abs, 257; nsamples=16)   # also a random number of points
 
 
 @article{SHK2024,
-     AUTHOR = {Suzuki, Yuya and Hyv\"onen, Nuutti and Karvonen, Toni},
-     TITLE = {M\"obius-transformed trapezoidal rule},
+     AUTHOR = {Suzuki, Yuya and Hyvönen, Nuutti and Karvonen, Toni},
+     TITLE = {Möbius-transformed trapezoidal rule},
    JOURNAL = {Math. Comp.},
   FJOURNAL = {Mathematics of Computation},
     VOLUME = {95},
